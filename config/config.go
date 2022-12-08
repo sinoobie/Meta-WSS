@@ -162,28 +162,33 @@ type Config struct {
 }
 
 type RawDNS struct {
-	Enable                bool              `yaml:"enable"`
-	PreferH3              bool              `yaml:"prefer-h3"`
-	IPv6                  bool              `yaml:"ipv6"`
-	UseHosts              bool              `yaml:"use-hosts"`
-	NameServer            []string          `yaml:"nameserver"`
-	Fallback              []string          `yaml:"fallback"`
-	FallbackFilter        RawFallbackFilter `yaml:"fallback-filter"`
-	Listen                string            `yaml:"listen"`
-	EnhancedMode          C.DNSMode         `yaml:"enhanced-mode"`
-	FakeIPRange           string            `yaml:"fake-ip-range"`
-	FakeIPFilter          []string          `yaml:"fake-ip-filter"`
-	DefaultNameserver     []string          `yaml:"default-nameserver"`
-	NameServerPolicy      map[string]string `yaml:"nameserver-policy"`
-	ProxyServerNameserver []string          `yaml:"proxy-server-nameserver"`
+	Enable                bool              `yaml:"enable" json:"enable"`
+	PreferH3              bool              `yaml:"prefer-h3" json:"prefer-h3"`
+	IPv6                  bool              `yaml:"ipv6" json:"ipv6"`
+	UseHosts              bool              `yaml:"use-hosts" json:"use-hosts"`
+	NameServer            []string          `yaml:"nameserver" json:"nameserver"`
+	Fallback              []string          `yaml:"fallback" json:"fallback"`
+	FallbackFilter        RawFallbackFilter `yaml:"fallback-filter" json:"fallback-filter"`
+	Listen                string            `yaml:"listen" json:"listen"`
+	EnhancedMode          C.DNSMode         `yaml:"enhanced-mode" json:"enhanced-mode"`
+	FakeIPRange           string            `yaml:"fake-ip-range" json:"fake-ip-range"`
+	FakeIPFilter          []string          `yaml:"fake-ip-filter" json:"fake-ip-filter"`
+	DefaultNameserver     []string          `yaml:"default-nameserver" json:"default-nameserver"`
+	NameServerPolicy      map[string]string `yaml:"nameserver-policy" json:"nameserver-policy"`
+	ProxyServerNameserver []string          `yaml:"proxy-server-nameserver" json:"proxy-server-nameserver"`
 }
 
 type RawFallbackFilter struct {
-	GeoIP     bool     `yaml:"geoip"`
-	GeoIPCode string   `yaml:"geoip-code"`
-	IPCIDR    []string `yaml:"ipcidr"`
-	Domain    []string `yaml:"domain"`
-	GeoSite   []string `yaml:"geosite"`
+	GeoIP     bool     `yaml:"geoip" json:"geoip"`
+	GeoIPCode string   `yaml:"geoip-code" json:"geoip-code"`
+	IPCIDR    []string `yaml:"ipcidr" json:"ipcidr"`
+	Domain    []string `yaml:"domain" json:"domain"`
+	GeoSite   []string `yaml:"geosite" json:"geosite"`
+}
+
+type RawClashForAndroid struct {
+	AppendSystemDNS   bool   `yaml:"append-system-dns" json:"append-system-dns"`
+	UiSubtitlePattern string `yaml:"ui-subtitle-pattern" json:"ui-subtitle-pattern"`
 }
 
 type RawTun struct {
@@ -226,51 +231,46 @@ type RawTuicServer struct {
 }
 
 type RawConfig struct {
-	Port                  int          `yaml:"port"`
-	SocksPort             int          `yaml:"socks-port"`
-	RedirPort             int          `yaml:"redir-port"`
-	TProxyPort            int          `yaml:"tproxy-port"`
-	MixedPort             int          `yaml:"mixed-port"`
-	ShadowSocksConfig     string       `yaml:"ss-config"`
-	VmessConfig           string       `yaml:"vmess-config"`
-	InboundTfo            bool         `yaml:"inbound-tfo"`
-	Authentication        []string     `yaml:"authentication"`
-	AllowLan              bool         `yaml:"allow-lan"`
-	BindAddress           string       `yaml:"bind-address"`
-	Mode                  T.TunnelMode `yaml:"mode"`
-	UnifiedDelay          bool         `yaml:"unified-delay"`
-	LogLevel              log.LogLevel `yaml:"log-level"`
-	IPv6                  bool         `yaml:"ipv6"`
-	ExternalController    string       `yaml:"external-controller"`
-	ExternalControllerTLS string       `yaml:"external-controller-tls"`
-	ExternalUI            string       `yaml:"external-ui"`
-	Secret                string       `yaml:"secret"`
-	Interface             string       `yaml:"interface-name"`
-	RoutingMark           int          `yaml:"routing-mark"`
-	Tunnels               []LC.Tunnel  `yaml:"tunnels"`
-	GeodataMode           bool         `yaml:"geodata-mode"`
-	GeodataLoader         string       `yaml:"geodata-loader"`
+	Port                  int          `yaml:"port" json:"port"`
+	SocksPort             int          `yaml:"socks-port" json:"socks-port"`
+	RedirPort             int          `yaml:"redir-port" json:"redir-port"`
+	TProxyPort            int          `yaml:"tproxy-port" json:"tproxy-port"`
+	MixedPort             int          `yaml:"mixed-port" json:"mixed-port"`
+	Authentication        []string     `yaml:"authentication" json:"authentication"`
+	AllowLan              bool         `yaml:"allow-lan" json:"allow-lan"`
+	BindAddress           string       `yaml:"bind-address" json:"bind-address"`
+	Mode                  T.TunnelMode `yaml:"mode" json:"mode"`
+	UnifiedDelay          bool         `yaml:"unified-delay" json:"unified-delay"`
+	LogLevel              log.LogLevel `yaml:"log-level" json:"log-level"`
+	IPv6                  bool         `yaml:"ipv6" json:"ipv6"`
+	ExternalController    string       `yaml:"external-controller" json:"external-controller"`
+	ExternalControllerTLS string       `yaml:"external-controller-tls" json:"external-controller-tls"`
+	ExternalUI            string       `yaml:"external-ui" json:"external-ui"`
+	Secret                string       `yaml:"secret" json:"secret"`
+	Interface             string       `yaml:"interface-name" json:"interface-name"`
+	RoutingMark           int          `yaml:"routing-mark" json:"routing-mark"`
+	Tunnels               []LC.Tunnel  `yaml:"tunnels" json:"tunnels"`
+	GeodataMode           bool         `yaml:"geodata-mode" json:"geodata-mode"`
+	GeodataLoader         string       `yaml:"geodata-loader" json:"geodata-loader"`
 	TCPConcurrent         bool         `yaml:"tcp-concurrent" json:"tcp-concurrent"`
 	EnableProcess         bool         `yaml:"enable-process" json:"enable-process"`
 
-	Sniffer       RawSniffer                `yaml:"sniffer"`
-	ProxyProvider map[string]map[string]any `yaml:"proxy-providers"`
-	RuleProvider  map[string]map[string]any `yaml:"rule-providers"`
-	Hosts         map[string]string         `yaml:"hosts"`
-	DNS           RawDNS                    `yaml:"dns"`
-	Tun           RawTun                    `yaml:"tun"`
-	TuicServer    RawTuicServer             `yaml:"tuic-server"`
-	EBpf          EBpf                      `yaml:"ebpf"`
-	IPTables      IPTables                  `yaml:"iptables"`
-	Experimental  Experimental              `yaml:"experimental"`
-	Profile       Profile                   `yaml:"profile"`
-	GeoXUrl       RawGeoXUrl                `yaml:"geox-url"`
-	Proxy         []map[string]any          `yaml:"proxies"`
-	ProxyGroup    []map[string]any          `yaml:"proxy-groups"`
-	Rule          []string                  `yaml:"rules"`
-	SubRules      map[string][]string       `yaml:"sub-rules"`
-	RawTLS        TLS                       `yaml:"tls"`
-	Listeners     []map[string]any          `yaml:"listeners"`
+	Sniffer       RawSniffer                `yaml:"sniffer" json:"sniffer"`
+	ProxyProvider map[string]map[string]any `yaml:"proxy-providers" json:"proxy-providers"`
+	RuleProvider  map[string]map[string]any `yaml:"rule-providers" json:"rule-providers"`
+	Hosts         map[string]string         `yaml:"hosts" json:"hosts"`
+	DNS           RawDNS                    `yaml:"dns" json:"dns"`
+	Experimental  Experimental              `yaml:"experimental" json:"experimental"`
+	Profile       Profile                   `yaml:"profile" json:"profile"`
+	GeoXUrl       RawGeoXUrl                `yaml:"geox-url" json:"geox-url"`
+	Proxy         []map[string]any          `yaml:"proxies" json:"proxies"`
+	ProxyGroup    []map[string]any          `yaml:"proxy-groups" json:"proxy-groups"`
+	Rule          []string                  `yaml:"rules" json:"rules"`
+	SubRules      map[string][]string       `yaml:"sub-rules" json:"sub-rules"`
+	RawTLS        TLS                       `yaml:"tls" json:"tls"`
+	Listeners     []map[string]any          `yaml:"listeners" json:"listeners"`
+
+	ClashForAndroid RawClashForAndroid `yaml:"clash-for-android" json:"clash-for-android"`
 }
 
 type RawGeoXUrl struct {
@@ -329,36 +329,6 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 		ProxyGroup:     []map[string]any{},
 		TCPConcurrent:  false,
 		EnableProcess:  false,
-		Tun: RawTun{
-			Enable:              false,
-			Device:              "",
-			Stack:               C.TunGvisor,
-			DNSHijack:           []string{"0.0.0.0:53"}, // default hijack all dns query
-			AutoRoute:           true,
-			AutoDetectInterface: true,
-			Inet6Address:        []LC.ListenPrefix{LC.ListenPrefix(netip.MustParsePrefix("fdfe:dcba:9876::1/126"))},
-		},
-		TuicServer: RawTuicServer{
-			Enable:                false,
-			Token:                 nil,
-			Certificate:           "",
-			PrivateKey:            "",
-			Listen:                "",
-			CongestionController:  "",
-			MaxIdleTime:           15000,
-			AuthenticationTimeout: 1000,
-			ALPN:                  []string{"h3"},
-			MaxUdpRelayPacketSize: 1500,
-		},
-		EBpf: EBpf{
-			RedirectToTun: []string{},
-			AutoRedir:     []string{},
-		},
-		IPTables: IPTables{
-			Enable:           false,
-			InboundInterface: "lo",
-			Bypass:           []string{},
-		},
 		DNS: RawDNS{
 			Enable:       false,
 			IPv6:         false,
@@ -419,7 +389,6 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	startTime := time.Now()
 	config.Experimental = &rawCfg.Experimental
 	config.Profile = &rawCfg.Profile
-	config.IPTables = &rawCfg.IPTables
 	config.TLS = &rawCfg.RawTLS
 
 	general, err := parseGeneral(rawCfg)
@@ -473,16 +442,6 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	}
 	config.DNS = dnsCfg
 
-	err = parseTun(rawCfg.Tun, config.General)
-	if err != nil {
-		return nil, err
-	}
-
-	err = parseTuicServer(rawCfg.TuicServer, config.General)
-	if err != nil {
-		return nil, err
-	}
-
 	config.Users = parseAuthentication(rawCfg.Authentication)
 
 	config.Tunnels = rawCfg.Tunnels
@@ -516,19 +475,15 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 			return nil, fmt.Errorf("external-ui: %s not exist", externalUI)
 		}
 	}
-	cfg.Tun.RedirectToTun = cfg.EBpf.RedirectToTun
 	return &General{
 		Inbound: Inbound{
-			Port:              cfg.Port,
-			SocksPort:         cfg.SocksPort,
-			RedirPort:         cfg.RedirPort,
-			TProxyPort:        cfg.TProxyPort,
-			MixedPort:         cfg.MixedPort,
-			ShadowSocksConfig: cfg.ShadowSocksConfig,
-			VmessConfig:       cfg.VmessConfig,
-			AllowLan:          cfg.AllowLan,
-			BindAddress:       cfg.BindAddress,
-			InboundTfo:        cfg.InboundTfo,
+			Port:        cfg.Port,
+			SocksPort:   cfg.SocksPort,
+			RedirPort:   cfg.RedirPort,
+			TProxyPort:  cfg.TProxyPort,
+			MixedPort:   cfg.MixedPort,
+			AllowLan:    cfg.AllowLan,
+			BindAddress: cfg.BindAddress,
 		},
 		Controller: Controller{
 			ExternalController:    cfg.ExternalController,
@@ -546,7 +501,6 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 		GeodataLoader: cfg.GeodataLoader,
 		TCPConcurrent: cfg.TCPConcurrent,
 		EnableProcess: cfg.EnableProcess,
-		EBpf:          cfg.EBpf,
 	}, nil
 }
 

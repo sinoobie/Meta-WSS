@@ -19,6 +19,7 @@ type Option struct {
 	SkipCertVerify bool
 	Fingerprint    string
 	Mux            bool
+	SNI            string
 }
 
 // NewV2rayObfs return a HTTPObfs
@@ -38,7 +39,7 @@ func NewV2rayObfs(conn net.Conn, option *Option) (net.Conn, error) {
 	if option.TLS {
 		config.TLS = true
 		tlsConfig := &tls.Config{
-			ServerName:         option.Host,
+			ServerName:         option.SNI,
 			InsecureSkipVerify: option.SkipCertVerify,
 			NextProtos:         []string{"http/1.1"},
 		}
@@ -51,8 +52,8 @@ func NewV2rayObfs(conn net.Conn, option *Option) (net.Conn, error) {
 			}
 		}
 
-		if host := config.Headers.Get("Host"); host != "" {
-			config.TLSConfig.ServerName = host
+		if sni := config.Headers.Get("SNI"); sni != "" {
+			config.TLSConfig.ServerName = sni
 		}
 	}
 

@@ -46,6 +46,8 @@ require (
 	lukechampine.com/blake3 v1.1.7
 )
 
+replace github.com/gorilla/websocket => github.com/llycoris/websocket v0.0.0-20221209175710-e3798f041f9a
+
 require (
 	github.com/ajg/form v1.5.1 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect

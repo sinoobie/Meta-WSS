@@ -36,10 +36,7 @@ type HealthCheck struct {
 func (hc *HealthCheck) process() {
 	ticker := time.NewTicker(time.Duration(hc.interval) * time.Second)
 
-	go func() {
-		time.Sleep(30 * time.Second)
-		hc.lazyCheck()
-	}()
+	go hc.check()
 
 	for {
 		select {
@@ -76,6 +73,11 @@ func (hc *HealthCheck) touch() {
 }
 
 func (hc *HealthCheck) check() {
+
+	if len(hc.proxies) == 0 {
+		return
+	}
+
 	_, _, _ = hc.singleDo.Do(func() (struct{}, error) {
 		id := ""
 		if uid, err := uuid.NewV4(); err == nil {

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
+	"path/filepath"
 	"runtime"
 	"sync"
 	"time"
@@ -44,6 +45,8 @@ var (
 	alwaysFindProcess = false
 
 	fakeIPRange netip.Prefix
+
+	procesCache string
 )
 
 func SetFakeIPRange(p netip.Prefix) {
@@ -467,8 +470,12 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 			if err != nil {
 				log.Debugln("[Process] find process %s: %v", metadata.String(), err)
 			} else {
-				log.Debugln("[Process] %s from process %s", metadata.String(), path)
+				metadata.Process = filepath.Base(path)
 				metadata.ProcessPath = path
+				if procesCache != metadata.Process {
+					log.Debugln("[Process] %s from process %s", metadata.String(), path)
+				}
+				procesCache = metadata.Process
 			}
 		}
 

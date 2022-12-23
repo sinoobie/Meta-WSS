@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
+	"runtime"
 	"strings"
 	"sync"
 
@@ -24,7 +25,18 @@ var (
 	ErrorDisableIPv6           = errors.New("IPv6 is disabled, dialer cancel")
 )
 
-func ApplyOptions(options ...Option) *option {
+func ParseNetwork(network string, addr netip.Addr) string {
+	if runtime.GOOS == "windows" { // fix bindIfaceToListenConfig() in windows force bind to an ipv4 address
+		if !strings.HasSuffix(network, "4") &&
+			!strings.HasSuffix(network, "6") &&
+			addr.Unmap().Is6() {
+			network += "6"
+		}
+	}
+	return network
+}
+
+func applyOptions(options ...Option) *option {
 	opt := &option{
 		interfaceName: DefaultInterface.Load(),
 		routingMark:   int(DefaultRoutingMark.Load()),
@@ -42,7 +54,7 @@ func ApplyOptions(options ...Option) *option {
 }
 
 func DialContext(ctx context.Context, network, address string, options ...Option) (net.Conn, error) {
-	opt := ApplyOptions(options...)
+	opt := applyOptions(options...)
 
 	if opt.network == 4 || opt.network == 6 {
 		if strings.Contains(network, "tcp") {
@@ -65,6 +77,9 @@ func DialContext(ctx context.Context, network, address string, options ...Option
 }
 
 func ListenPacket(ctx context.Context, network, address string, options ...Option) (net.PacketConn, error) {
+	if DefaultSocketHook != nil {
+		return listenPacketHooked(ctx, network, address)
+	}
 	cfg := &option{
 		interfaceName: DefaultInterface.Load(),
 		routingMark:   int(DefaultRoutingMark.Load()),
@@ -115,6 +130,10 @@ func GetDial() bool {
 }
 
 func dialContext(ctx context.Context, network string, destination netip.Addr, port string, opt *option) (net.Conn, error) {
+	if DefaultSocketHook != nil {
+		return dialContextHooked(ctx, network, destination, port)
+	}
+
 	dialer := &net.Dialer{}
 	if opt.interfaceName != "" {
 		if err := bindIfaceToDialer(opt.interfaceName, dialer, network, destination); err != nil {
@@ -431,4 +450,21 @@ func concurrentIPv6DialContext(ctx context.Context, network, address string, opt
 	}
 
 	return concurrentDialContext(ctx, network, ips, port, opt)
+}
+
+type Dialer struct {
+	Opt option
+}
+
+func (d Dialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
+	return DialContext(ctx, network, address, WithOption(d.Opt))
+}
+
+func (d Dialer) ListenPacket(ctx context.Context, network, address string, rAddrPort netip.AddrPort) (net.PacketConn, error) {
+	return ListenPacket(ctx, ParseNetwork(network, rAddrPort.Addr()), address, WithOption(d.Opt))
+}
+
+func NewDialer(options ...Option) Dialer {
+	opt := applyOptions(options...)
+	return Dialer{Opt: *opt}
 }

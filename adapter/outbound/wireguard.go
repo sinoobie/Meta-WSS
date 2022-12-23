@@ -41,18 +41,19 @@ type WireGuard struct {
 
 type WireGuardOption struct {
 	BasicOption
-	Name         string `proxy:"name"`
-	Server       string `proxy:"server"`
-	Port         int    `proxy:"port"`
-	Ip           string `proxy:"ip,omitempty"`
-	Ipv6         string `proxy:"ipv6,omitempty"`
-	PrivateKey   string `proxy:"private-key"`
-	PublicKey    string `proxy:"public-key"`
-	PreSharedKey string `proxy:"pre-shared-key,omitempty"`
-	Reserved     []int  `proxy:"reserved,omitempty"`
-	Workers      int    `proxy:"workers,omitempty"`
-	MTU          int    `proxy:"mtu,omitempty"`
-	UDP          bool   `proxy:"udp,omitempty"`
+	Name                string  `proxy:"name"`
+	Server              string  `proxy:"server"`
+	Port                int     `proxy:"port"`
+	Ip                  string  `proxy:"ip,omitempty"`
+	Ipv6                string  `proxy:"ipv6,omitempty"`
+	PrivateKey          string  `proxy:"private-key"`
+	PublicKey           string  `proxy:"public-key"`
+	PreSharedKey        string  `proxy:"pre-shared-key,omitempty"`
+	Reserved            []uint8 `proxy:"reserved,omitempty"`
+	Workers             int     `proxy:"workers,omitempty"`
+	MTU                 int     `proxy:"mtu,omitempty"`
+	UDP                 bool    `proxy:"udp,omitempty"`
+	PersistentKeepalive int     `proxy:"persistent-keepalive,omitempty"`
 }
 
 type wgDialer struct {
@@ -64,7 +65,7 @@ func (d *wgDialer) DialContext(ctx context.Context, network string, destination 
 }
 
 func (d *wgDialer) ListenPacket(ctx context.Context, destination M.Socksaddr) (net.PacketConn, error) {
-	return dialer.ListenPacket(ctx, "udp", "", d.options...)
+	return dialer.ListenPacket(ctx, dialer.ParseNetwork("udp", destination.Addr), "", d.options...)
 }
 
 func NewWireGuard(option WireGuardOption) (*WireGuard, error) {
@@ -91,8 +92,7 @@ func NewWireGuard(option WireGuardOption) (*WireGuard, error) {
 		reserved[1] = uint8(option.Reserved[1])
 		reserved[2] = uint8(option.Reserved[2])
 	}
-	peerAddr := M.ParseSocksaddr(option.Server)
-	peerAddr.Port = uint16(option.Port)
+	peerAddr := M.ParseSocksaddrHostPort(option.Server, uint16(option.Port))
 	outbound.bind = wireguard.NewClientBind(context.Background(), outbound.dialer, peerAddr, reserved)
 	localPrefixes := make([]netip.Prefix, 0, 2)
 	if len(option.Ip) > 0 {
@@ -160,6 +160,9 @@ func NewWireGuard(option WireGuardOption) (*WireGuard, error) {
 	if has6 {
 		ipcConf += "\nallowed_ip=::/0"
 	}
+	if option.PersistentKeepalive != 0 {
+		ipcConf += fmt.Sprintf("\npersistent_keepalive_interval=%d", option.PersistentKeepalive)
+	}
 	mtu := option.MTU
 	if mtu == 0 {
 		mtu = 1408
@@ -212,7 +215,8 @@ func (w *WireGuard) DialContext(ctx context.Context, metadata *C.Metadata, opts 
 		}
 		conn, err = N.DialSerial(ctx, w.tunDevice, "tcp", M.ParseSocksaddr(metadata.RemoteAddress()), addrs)
 	} else {
-		conn, err = w.tunDevice.DialContext(ctx, "tcp", M.ParseSocksaddr(metadata.Pure().RemoteAddress()))
+		port, _ := strconv.Atoi(metadata.DstPort)
+		conn, err = w.tunDevice.DialContext(ctx, "tcp", M.SocksaddrFrom(metadata.DstIP, uint16(port)))
 	}
 	if err != nil {
 		return nil, err
@@ -242,7 +246,8 @@ func (w *WireGuard) ListenPacketContext(ctx context.Context, metadata *C.Metadat
 		}
 		metadata.DstIP = ip
 	}
-	pc, err = w.tunDevice.ListenPacket(ctx, M.ParseSocksaddr(metadata.Pure().RemoteAddress()))
+	port, _ := strconv.Atoi(metadata.DstPort)
+	pc, err = w.tunDevice.ListenPacket(ctx, M.SocksaddrFrom(metadata.DstIP, uint16(port)))
 	if err != nil {
 		return nil, err
 	}

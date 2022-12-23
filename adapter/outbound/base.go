@@ -57,14 +57,24 @@ func (b *Base) DialContext(ctx context.Context, metadata *C.Metadata, opts ...di
 	return nil, errors.New("no support")
 }
 
+// DialContextWithDialer implements C.ProxyAdapter
+func (b *Base) DialContextWithDialer(ctx context.Context, dialer C.Dialer, metadata *C.Metadata) (_ C.Conn, err error) {
+	return nil, errors.New("no support")
+}
+
 // ListenPacketContext implements C.ProxyAdapter
 func (b *Base) ListenPacketContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.PacketConn, error) {
 	return nil, errors.New("no support")
 }
 
-// ListenPacketOnStreamConn implements C.ProxyAdapter
-func (b *Base) ListenPacketOnStreamConn(c net.Conn, metadata *C.Metadata) (_ C.PacketConn, err error) {
+// ListenPacketWithDialer implements C.ProxyAdapter
+func (b *Base) ListenPacketWithDialer(ctx context.Context, dialer C.Dialer, metadata *C.Metadata) (_ C.PacketConn, err error) {
 	return nil, errors.New("no support")
+}
+
+// SupportWithDialer implements C.ProxyAdapter
+func (b *Base) SupportWithDialer() bool {
+	return false
 }
 
 // SupportUOT implements C.ProxyAdapter

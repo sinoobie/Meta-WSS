@@ -55,8 +55,12 @@ type TuicOption struct {
 
 // DialContext implements C.ProxyAdapter
 func (t *Tuic) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.Conn, error) {
-	opts = t.Base.DialOptions(opts...)
-	conn, err := t.client.DialContext(ctx, metadata, t.dial, opts...)
+	return t.DialContextWithDialer(ctx, dialer.NewDialer(t.Base.DialOptions(opts...)...), metadata)
+}
+
+// DialContextWithDialer implements C.ProxyAdapter
+func (t *Tuic) DialContextWithDialer(ctx context.Context, dialer C.Dialer, metadata *C.Metadata) (C.Conn, error) {
+	conn, err := t.client.DialContextWithDialer(ctx, metadata, dialer, t.dialWithDialer)
 	if err != nil {
 		return nil, err
 	}
@@ -65,20 +69,34 @@ func (t *Tuic) DialContext(ctx context.Context, metadata *C.Metadata, opts ...di
 
 // ListenPacketContext implements C.ProxyAdapter
 func (t *Tuic) ListenPacketContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (_ C.PacketConn, err error) {
-	opts = t.Base.DialOptions(opts...)
-	pc, err := t.client.ListenPacketContext(ctx, metadata, t.dial, opts...)
+	return t.ListenPacketWithDialer(ctx, dialer.NewDialer(t.Base.DialOptions(opts...)...), metadata)
+}
+
+// ListenPacketWithDialer implements C.ProxyAdapter
+func (t *Tuic) ListenPacketWithDialer(ctx context.Context, dialer C.Dialer, metadata *C.Metadata) (_ C.PacketConn, err error) {
+	pc, err := t.client.ListenPacketWithDialer(ctx, metadata, dialer, t.dialWithDialer)
 	if err != nil {
 		return nil, err
 	}
 	return newPacketConn(pc, t), nil
 }
 
+// SupportWithDialer implements C.ProxyAdapter
+func (t *Tuic) SupportWithDialer() bool {
+	return true
+}
+
 func (t *Tuic) dial(ctx context.Context, opts ...dialer.Option) (pc net.PacketConn, addr net.Addr, err error) {
-	pc, err = dialer.ListenPacket(ctx, "udp", "", opts...)
+	return t.dialWithDialer(ctx, dialer.NewDialer(opts...))
+}
+
+func (t *Tuic) dialWithDialer(ctx context.Context, dialer C.Dialer) (pc net.PacketConn, addr net.Addr, err error) {
+	udpAddr, err := resolveUDPAddrWithPrefer(ctx, "udp", t.addr, t.prefer)
 	if err != nil {
 		return nil, nil, err
 	}
-	addr, err = resolveUDPAddrWithPrefer(ctx, "udp", t.addr, t.prefer)
+	addr = udpAddr
+	pc, err = dialer.ListenPacket(ctx, "udp", "", udpAddr.AddrPort())
 	if err != nil {
 		return nil, nil, err
 	}

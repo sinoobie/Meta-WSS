@@ -9,6 +9,7 @@ import (
 	"encoding/pem"
 	"fmt"
 	"net"
+	"net/netip"
 	"os"
 	"regexp"
 	"strconv"
@@ -51,8 +52,8 @@ type Hysteria struct {
 func (h *Hysteria) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.Conn, error) {
 	hdc := hyDialerWithContext{
 		ctx: context.Background(),
-		hyDialer: func() (net.PacketConn, error) {
-			return dialer.ListenPacket(ctx, "udp", "", h.Base.DialOptions(opts...)...)
+		hyDialer: func(network string) (net.PacketConn, error) {
+			return dialer.ListenPacket(ctx, network, "", h.Base.DialOptions(opts...)...)
 		},
 		remoteAddr: func(addr string) (net.Addr, error) {
 			return resolveUDPAddrWithPrefer(ctx, "udp", addr, h.prefer)
@@ -70,8 +71,8 @@ func (h *Hysteria) DialContext(ctx context.Context, metadata *C.Metadata, opts .
 func (h *Hysteria) ListenPacketContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.PacketConn, error) {
 	hdc := hyDialerWithContext{
 		ctx: context.Background(),
-		hyDialer: func() (net.PacketConn, error) {
-			return dialer.ListenPacket(ctx, "udp", "", h.Base.DialOptions(opts...)...)
+		hyDialer: func(network string) (net.PacketConn, error) {
+			return dialer.ListenPacket(ctx, network, "", h.Base.DialOptions(opts...)...)
 		},
 		remoteAddr: func(addr string) (net.Addr, error) {
 			return resolveUDPAddrWithPrefer(ctx, "udp", addr, h.prefer)
@@ -88,7 +89,7 @@ type HysteriaOption struct {
 	BasicOption
 	Name                string   `proxy:"name"`
 	Server              string   `proxy:"server"`
-	Port                int      `proxy:"port"`
+	Port                int      `proxy:"port,omitempty"`
 	Ports               string   `proxy:"ports,omitempty"`
 	Protocol            string   `proxy:"protocol,omitempty"`
 	ObfsProtocol        string   `proxy:"obfs-protocol,omitempty"` // compatible with Stash
@@ -133,12 +134,8 @@ func NewHysteria(option HysteriaOption) (*Hysteria, error) {
 			Timeout: 8 * time.Second,
 		},
 	}
-	var addr string
-	if len(option.Ports) == 0 {
-		addr = net.JoinHostPort(option.Server, strconv.Itoa(option.Port))
-	} else {
-		addr = net.JoinHostPort(option.Server, option.Ports)
-	}
+	addr := net.JoinHostPort(option.Server, strconv.Itoa(option.Port))
+	ports := option.Ports
 
 	serverName := option.Server
 	if option.SNI != "" {
@@ -243,7 +240,7 @@ func NewHysteria(option HysteriaOption) (*Hysteria, error) {
 		down = uint64(option.DownSpeed * mbpsToBps)
 	}
 	client, err := core.NewClient(
-		addr, option.Protocol, auth, tlsConfig, quicConfig, clientTransport, up, down, func(refBPS uint64) congestion.CongestionControl {
+		addr, ports, option.Protocol, auth, tlsConfig, quicConfig, clientTransport, up, down, func(refBPS uint64) congestion.CongestionControl {
 			return hyCongestion.NewBrutalSender(congestion.ByteCount(refBPS))
 		}, obfuscator, hopInterval, option.FastOpen,
 	)
@@ -325,13 +322,17 @@ func (c *hyPacketConn) WriteTo(p []byte, addr net.Addr) (n int, err error) {
 }
 
 type hyDialerWithContext struct {
-	hyDialer   func() (net.PacketConn, error)
+	hyDialer   func(network string) (net.PacketConn, error)
 	ctx        context.Context
 	remoteAddr func(host string) (net.Addr, error)
 }
 
-func (h *hyDialerWithContext) ListenPacket() (net.PacketConn, error) {
-	return h.hyDialer()
+func (h *hyDialerWithContext) ListenPacket(rAddr net.Addr) (net.PacketConn, error) {
+	network := "udp"
+	if addrPort, err := netip.ParseAddrPort(rAddr.String()); err == nil {
+		network = dialer.ParseNetwork(network, addrPort.Addr())
+	}
+	return h.hyDialer(network)
 }
 
 func (h *hyDialerWithContext) Context() context.Context {

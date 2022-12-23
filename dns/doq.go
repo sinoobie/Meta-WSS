@@ -12,7 +12,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Dreamacro/clash/component/dialer"
 	tlsC "github.com/Dreamacro/clash/component/tls"
 	"github.com/metacubex/quic-go"
 
@@ -314,19 +313,9 @@ func (doq *dnsOverQUIC) openConnection(ctx context.Context) (conn quic.Connectio
 	if err != nil {
 		return nil, fmt.Errorf("failed to open a QUIC connection: %w", err)
 	}
+	addr := rawConn.RemoteAddr().String()
 	// It's never actually used
 	_ = rawConn.Close()
-	var addr string
-	udpConn, ok := rawConn.(*net.UDPConn)
-	if !ok {
-		if packetConn, ok := rawConn.(*wrapPacketConn); !ok {
-			return nil, fmt.Errorf("failed to open connection to %s", doq.addr)
-		} else {
-			addr = packetConn.RemoteAddr().String()
-		}
-	} else {
-		addr = udpConn.RemoteAddr().String()
-	}
 
 	ip, port, err := net.SplitHostPort(addr)
 	if err != nil {
@@ -335,24 +324,9 @@ func (doq *dnsOverQUIC) openConnection(ctx context.Context) (conn quic.Connectio
 
 	p, err := strconv.Atoi(port)
 	udpAddr := net.UDPAddr{IP: net.ParseIP(ip), Port: p}
-	var udp net.PacketConn
-	if doq.proxyAdapter == "" {
-		udp, err = dialer.ListenPacket(ctx, "udp", "")
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		conn, err := dialContextExtra(ctx, doq.proxyAdapter, "udp", addr, doq.r)
-		if err != nil {
-			return nil, err
-		}
-
-		wrapConn, ok := conn.(*wrapPacketConn)
-		if !ok {
-			return nil, fmt.Errorf("quic create packet failed")
-		}
-
-		udp = wrapConn
+	udp, err := listenPacket(ctx, doq.proxyAdapter, "udp", addr, doq.r)
+	if err != nil {
+		return nil, err
 	}
 
 	host, _, err := net.SplitHostPort(doq.addr)

@@ -4,16 +4,14 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"github.com/Dreamacro/clash/component/resolver"
+	C "github.com/Dreamacro/clash/constant"
+	"github.com/Dreamacro/clash/transport/socks5"
 	xtls "github.com/xtls/go"
 	"net"
 	"net/netip"
 	"strconv"
 	"sync"
-	"time"
-
-	"github.com/Dreamacro/clash/component/resolver"
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/transport/socks5"
 )
 
 var (
@@ -23,10 +21,10 @@ var (
 )
 
 func tcpKeepAlive(c net.Conn) {
-	if tcp, ok := c.(*net.TCPConn); ok {
-		_ = tcp.SetKeepAlive(true)
-		_ = tcp.SetKeepAlivePeriod(30 * time.Second)
-	}
+	//if tcp, ok := c.(*net.TCPConn); ok {
+	//	_ = tcp.SetKeepAlive(true)
+	//	_ = tcp.SetKeepAlivePeriod(30 * time.Second)
+	//}
 }
 
 func getClientSessionCache() tls.ClientSessionCache {
@@ -126,7 +124,7 @@ func resolveUDPAddrWithPrefer(ctx context.Context, network, address string, pref
 	if !ip.IsValid() && fallback.IsValid() {
 		ip = fallback
 	}
-	
+
 	if err != nil {
 		return nil, err
 	}
@@ -134,7 +132,7 @@ func resolveUDPAddrWithPrefer(ctx context.Context, network, address string, pref
 }
 
 func safeConnClose(c net.Conn, err error) {
-	if err != nil {
+	if err != nil && c != nil {
 		_ = c.Close()
 	}
 }

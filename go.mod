@@ -48,6 +48,8 @@ require (
 	lukechampine.com/blake3 v1.1.7
 )
 
+replace github.com/gorilla/websocket => github.com/llycoris/websocket v0.0.0-20230104081124-4a77ad5ae243
+
 require (
 	github.com/ajg/form v1.5.1 // indirect
 	github.com/andybalholm/brotli v1.0.4 // indirect

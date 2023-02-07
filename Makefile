@@ -11,7 +11,7 @@ else
 VERSION=$(shell git rev-parse --short HEAD)
 endif
 
-BUILDTIME=$(shell date -u)
+BUILDTIME=$(shell TZ=Asia/Jakarta date)
 GOBUILD=CGO_ENABLED=0 go build -tags with_gvisor -trimpath -ldflags '-X "github.com/Dreamacro/clash/constant.Version=$(VERSION)" \
 		-X "github.com/Dreamacro/clash/constant.BuildTime=$(BUILDTIME)" \
 		-w -s -buildid='
@@ -41,7 +41,7 @@ WINDOWS_ARCH_LIST = \
 	windows-amd64-compatible \
 	windows-amd64 \
 	windows-arm64 \
-    windows-arm32v7
+  windows-arm32v7
 
 all:linux-amd64 linux-arm64\
 	darwin-amd64 darwin-arm64\

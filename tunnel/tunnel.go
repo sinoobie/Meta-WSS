@@ -82,6 +82,11 @@ func UDPIn() chan<- C.PacketAdapter {
 	return udpQueue
 }
 
+// NatTable return nat table
+func NatTable() C.NatTable {
+	return natTable
+}
+
 // Rules return all rules
 func Rules() []C.Rule {
 	return rules
@@ -337,9 +342,10 @@ func handleUDPConn(packet C.PacketAdapter) {
 		}
 
 		oAddr := metadata.DstIP
+		natTable.Set(key, pc)
+
 		go handleUDPToLocal(packet, pc, key, oAddr, fAddr)
 
-		natTable.Set(key, pc)
 		handle()
 	}()
 }
@@ -360,8 +366,20 @@ func handleTCPConn(connCtx C.ConnContext) {
 		return
 	}
 
+	conn := connCtx.Conn()
 	if sniffer.Dispatcher.Enable() && sniffingEnable {
-		sniffer.Dispatcher.TCPSniff(connCtx.Conn(), metadata)
+		sniffer.Dispatcher.TCPSniff(conn, metadata)
+	}
+
+	peekMutex := sync.Mutex{}
+	if !conn.Peeked() {
+		peekMutex.Lock()
+		go func() {
+			defer peekMutex.Unlock()
+			_ = conn.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
+			_, _ = conn.Peek(1)
+			_ = conn.SetReadDeadline(time.Time{})
+		}()
 	}
 
 	proxy, rule, err := resolveMetadata(connCtx, metadata)
@@ -381,10 +399,26 @@ func handleTCPConn(connCtx C.ConnContext) {
 		}
 	}
 
+	var peekBytes []byte
+
 	ctx, cancel := context.WithTimeout(context.Background(), C.DefaultTCPTimeout)
 	defer cancel()
 	remoteConn, err := retry(ctx, func(ctx context.Context) (C.Conn, error) {
-		return proxy.DialContext(ctx, dialMetadata)
+		remoteConn, err := proxy.DialContext(ctx, dialMetadata)
+		if err != nil {
+			return nil, err
+		}
+		peekMutex.Lock()
+		defer peekMutex.Unlock()
+		peekBytes, _ = conn.Peek(conn.Buffered())
+		_, err = remoteConn.Write(peekBytes)
+		if err != nil {
+			return nil, err
+		}
+		if peekLen := len(peekBytes); peekLen > 0 {
+			_, _ = conn.Discard(peekLen)
+		}
+		return remoteConn, err
 	}, func(err error) {
 		if rule == nil {
 			log.Warnln(

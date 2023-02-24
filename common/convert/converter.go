@@ -114,6 +114,12 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 				trojan["grpc-opts"] = grpcOpts
 			}
 
+			if fingerprint := query.Get("fp"); fingerprint == "" {
+				trojan["client-fingerprint"] = "chrome"
+			} else {
+				trojan["client-fingerprint"] = fingerprint
+			}
+
 			proxies = append(proxies, trojan)
 
 		case "vless":

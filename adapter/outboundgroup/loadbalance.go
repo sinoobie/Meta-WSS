@@ -10,6 +10,7 @@ import (
 
 	"github.com/Dreamacro/clash/adapter/outbound"
 	"github.com/Dreamacro/clash/common/cache"
+	"github.com/Dreamacro/clash/common/callback"
 	"github.com/Dreamacro/clash/common/murmur3"
 	"github.com/Dreamacro/clash/component/dialer"
 	C "github.com/Dreamacro/clash/constant"
@@ -83,17 +84,24 @@ func jumpHash(key uint64, buckets int32) int32 {
 // DialContext implements C.ProxyAdapter
 func (lb *LoadBalance) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (c C.Conn, err error) {
 	proxy := lb.Unwrap(metadata, true)
-
-	defer func() {
-		if err == nil {
-			c.AppendToChains(lb)
-			lb.onDialSuccess()
-		} else {
-			lb.onDialFailed(proxy.Type(), err)
-		}
-	}()
-
 	c, err = proxy.DialContext(ctx, metadata, lb.Base.DialOptions(opts...)...)
+
+	if err == nil {
+		c.AppendToChains(lb)
+	} else {
+		lb.onDialFailed(proxy.Type(), err)
+	}
+
+	c = &callback.FirstWriteCallBackConn{
+		Conn: c,
+		Callback: func(err error) {
+			if err == nil {
+				lb.onDialSuccess()
+			} else {
+				lb.onDialFailed(proxy.Type(), err)
+			}
+		},
+	}
 	return
 }
 
@@ -115,11 +123,20 @@ func (lb *LoadBalance) SupportUDP() bool {
 }
 
 func strategyRoundRobin() strategyFn {
+	flag := true
 	idx := 0
 	return func(proxies []C.Proxy, metadata *C.Metadata) C.Proxy {
 		length := len(proxies)
 		for i := 0; i < length; i++ {
-			idx = (idx + 1) % length
+			flag = !flag
+			if flag {
+				idx = (idx - 1) % length
+			} else {
+				idx = (idx + 2) % length
+			}
+			if idx < 0 {
+				idx = idx + length
+			}
 			proxy := proxies[idx]
 			if proxy.Alive() {
 				return proxy

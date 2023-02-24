@@ -81,13 +81,13 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	updateRules(cfg.Rules, cfg.SubRules, cfg.RuleProviders)
 	updateSniffer(cfg.Sniffer)
 	updateHosts(cfg.Hosts)
+	updateGeneral(cfg.General)
 	initInnerTcp()
 	updateDNS(cfg.DNS, cfg.General.IPv6)
 	loadProxyProvider(cfg.Providers)
 	updateProfile(cfg)
 	loadRuleProvider(cfg.RuleProviders)
-	updateGeneral(cfg.General, force)
-	updateListeners(cfg.Listeners)
+	updateListeners(cfg.General, cfg.Listeners, force)
 	updateIPTables(cfg)
 	updateTun(cfg.General)
 	updateExperimental(cfg)
@@ -134,11 +134,35 @@ func GetGeneral() *config.General {
 	return general
 }
 
-func updateListeners(listeners map[string]C.InboundListener) {
+func updateListeners(general *config.General, listeners map[string]C.InboundListener, force bool) {
 	tcpIn := tunnel.TCPIn()
 	udpIn := tunnel.UDPIn()
+	natTable := tunnel.NatTable()
 
-	listener.PatchInboundListeners(listeners, tcpIn, udpIn, true)
+	listener.PatchInboundListeners(listeners, tcpIn, udpIn, natTable, true)
+	if !force {
+		return
+	}
+
+	if general.Interface == "" && (!general.Tun.Enable || !general.Tun.AutoDetectInterface) {
+		dialer.DefaultInterface.Store(general.Interface)
+	}
+
+	inbound.SetTfo(general.InboundTfo)
+	allowLan := general.AllowLan
+	listener.SetAllowLan(allowLan)
+
+	bindAddress := general.BindAddress
+	listener.SetBindAddress(bindAddress)
+	listener.ReCreateHTTP(general.Port, tcpIn)
+	listener.ReCreateSocks(general.SocksPort, tcpIn, udpIn)
+	listener.ReCreateRedir(general.RedirPort, tcpIn, udpIn, natTable)
+	listener.ReCreateAutoRedir(general.EBpf.AutoRedir, tcpIn, udpIn)
+	listener.ReCreateTProxy(general.TProxyPort, tcpIn, udpIn, natTable)
+	listener.ReCreateMixed(general.MixedPort, tcpIn, udpIn)
+	listener.ReCreateShadowSocks(general.ShadowSocksConfig, tcpIn, udpIn)
+	listener.ReCreateVmess(general.VmessConfig, tcpIn, udpIn)
+	listener.ReCreateTuic(LC.TuicServer(general.TuicServer), tcpIn, udpIn)
 }
 
 func updateExperimental(c *config.Config) {
@@ -303,7 +327,7 @@ func updateTunnels(tunnels []LC.Tunnel) {
 	listener.PatchTunnel(tunnels, tunnel.TCPIn(), tunnel.UDPIn())
 }
 
-func updateGeneral(general *config.General, force bool) {
+func updateGeneral(general *config.General) {
 	tunnel.SetMode(general.Mode)
 	tunnel.SetFindProcessMode(general.FindProcessMode)
 	dialer.DisableIPv6 = !general.IPv6
@@ -318,10 +342,15 @@ func updateGeneral(general *config.General, force bool) {
 	}
 
 	adapter.UnifiedDelay.Store(general.UnifiedDelay)
-	dialer.DefaultInterface.Store(general.Interface)
-
-	if dialer.DefaultInterface.Load() != "" {
-		log.Infoln("Use interface name: %s", general.Interface)
+	// Avoid reload configuration clean the value, causing traffic loops
+	if listener.GetTunConf().Enable && listener.GetTunConf().AutoDetectInterface {
+		// changed only when the name is specified
+		// if name is empty, setting delay until after tun loaded
+		if general.Interface != "" && (!general.Tun.Enable || !general.Tun.AutoDetectInterface) {
+			dialer.DefaultInterface.Store(general.Interface)
+		}
+	} else {
+		dialer.DefaultInterface.Store(general.Interface)
 	}
 
 	dialer.DefaultRoutingMark.Store(int32(general.RoutingMark))
@@ -330,34 +359,8 @@ func updateGeneral(general *config.General, force bool) {
 	}
 
 	iface.FlushCache()
-
-	if !force {
-		return
-	}
-
 	geodataLoader := general.GeodataLoader
 	G.SetLoader(geodataLoader)
-
-	allowLan := general.AllowLan
-	listener.SetAllowLan(allowLan)
-
-	bindAddress := general.BindAddress
-	listener.SetBindAddress(bindAddress)
-
-	inbound.SetTfo(general.InboundTfo)
-
-	tcpIn := tunnel.TCPIn()
-	udpIn := tunnel.UDPIn()
-
-	listener.ReCreateHTTP(general.Port, tcpIn)
-	listener.ReCreateSocks(general.SocksPort, tcpIn, udpIn)
-	listener.ReCreateRedir(general.RedirPort, tcpIn, udpIn)
-	listener.ReCreateAutoRedir(general.EBpf.AutoRedir, tcpIn, udpIn)
-	listener.ReCreateTProxy(general.TProxyPort, tcpIn, udpIn)
-	listener.ReCreateMixed(general.MixedPort, tcpIn, udpIn)
-	listener.ReCreateShadowSocks(general.ShadowSocksConfig, tcpIn, udpIn)
-	listener.ReCreateVmess(general.VmessConfig, tcpIn, udpIn)
-	listener.ReCreateTuic(LC.TuicServer(general.TuicServer), tcpIn, udpIn)
 }
 
 func updateUsers(users []auth.AuthUser) {

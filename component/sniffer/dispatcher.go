@@ -36,12 +36,7 @@ type SnifferDispatcher struct {
 	parsePureIp     bool
 }
 
-func (sd *SnifferDispatcher) TCPSniff(conn net.Conn, metadata *C.Metadata) {
-	bufConn, ok := conn.(*N.BufferedConn)
-	if !ok {
-		return
-	}
-
+func (sd *SnifferDispatcher) TCPSniff(conn *N.BufferedConn, metadata *C.Metadata) {
 	if (metadata.Host == "" && sd.parsePureIp) || sd.forceDomain.Search(metadata.Host) != nil || (metadata.DNSMode == C.DNSMapping && sd.forceDnsMapping) {
 		port, err := strconv.ParseUint(metadata.DstPort, 10, 16)
 		if err != nil {
@@ -74,7 +69,7 @@ func (sd *SnifferDispatcher) TCPSniff(conn net.Conn, metadata *C.Metadata) {
 		}
 		sd.rwMux.RUnlock()
 
-		if host, err := sd.sniffDomain(bufConn, metadata); err != nil {
+		if host, err := sd.sniffDomain(conn, metadata); err != nil {
 			sd.cacheSniffFailed(metadata)
 			log.Debugln("[Sniffer] All sniffing sniff failed with from [%s:%s] to [%s:%s]", metadata.SrcIP, metadata.SrcPort, metadata.String(), metadata.DstPort)
 			return
@@ -94,29 +89,15 @@ func (sd *SnifferDispatcher) TCPSniff(conn net.Conn, metadata *C.Metadata) {
 }
 
 func (sd *SnifferDispatcher) replaceDomain(metadata *C.Metadata, host string, overrideDest bool) {
-	dstIP := ""
-	if metadata.DstIP.IsValid() {
-		dstIP = metadata.DstIP.String()
-	}
-	originHost := metadata.Host
-	if originHost != host {
-		log.Infoln("[Sniffer] Sniff TCP [%s]-->[%s:%s] success, replace domain [%s]-->[%s]",
-			metadata.SourceDetail(),
-			dstIP, metadata.DstPort,
-			metadata.Host, host)
-	} else {
-		log.Debugln("[Sniffer] Sniff TCP [%s]-->[%s:%s] success, replace domain [%s]-->[%s]",
-			metadata.SourceDetail(),
-			dstIP, metadata.DstPort,
-			metadata.Host, host)
-	}
-
+	metadata.SniffHost = host
 	if overrideDest {
 		metadata.Host = host
-	} else {
-		metadata.SniffHost = host
 	}
 	metadata.DNSMode = C.DNSNormal
+	log.Debugln("[Sniffer] Sniff TCP [%s]-->[%s] success, replace domain [%s]-->[%s]",
+		metadata.SourceDetail(),
+		metadata.RemoteAddress(),
+		metadata.Host, host)
 }
 
 func (sd *SnifferDispatcher) Enable() bool {

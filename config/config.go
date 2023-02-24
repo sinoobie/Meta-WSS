@@ -432,7 +432,6 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	}
 	config.General = general
 
-	dialer.DefaultInterface.Store(config.General.Interface)
 	proxies, providers, err := parseProxies(rawCfg)
 	if err != nil {
 		return nil, err
@@ -875,29 +874,24 @@ func parseNameServer(servers []string, preferH3 bool) ([]dns.NameServer, error) 
 			addr, err = hostWithDefaultPort(u.Host, "853")
 			dnsNetType = "tcp-tls" // DNS over TLS
 		case "https":
-			host := u.Host
-			proxyAdapter = ""
-			if _, _, err := net.SplitHostPort(host); err != nil && strings.Contains(err.Error(), "missing port in address") {
-				host = net.JoinHostPort(host, "443")
-			} else {
-				if err != nil {
-					return nil, err
-				}
-			}
-			clearURL := url.URL{Scheme: "https", Host: host, Path: u.Path}
-			addr = clearURL.String()
-			dnsNetType = "https" // DNS over HTTPS
-			if len(u.Fragment) != 0 {
-				for _, s := range strings.Split(u.Fragment, "&") {
-					arr := strings.Split(s, "=")
-					if len(arr) == 0 {
-						continue
-					} else if len(arr) == 1 {
-						proxyAdapter = arr[0]
-					} else if len(arr) == 2 {
-						params[arr[0]] = arr[1]
-					} else {
-						params[arr[0]] = strings.Join(arr[1:], "=")
+			addr, err = hostWithDefaultPort(u.Host, "443")
+			if err == nil {
+				proxyAdapter = ""
+				clearURL := url.URL{Scheme: "https", Host: addr, Path: u.Path}
+				addr = clearURL.String()
+				dnsNetType = "https" // DNS over HTTPS
+				if len(u.Fragment) != 0 {
+					for _, s := range strings.Split(u.Fragment, "&") {
+						arr := strings.Split(s, "=")
+						if len(arr) == 0 {
+							continue
+						} else if len(arr) == 1 {
+							proxyAdapter = arr[0]
+						} else if len(arr) == 2 {
+							params[arr[0]] = arr[1]
+						} else {
+							params[arr[0]] = strings.Join(arr[1:], "=")
+						}
 					}
 				}
 			}
@@ -1002,6 +996,7 @@ func parseFallbackGeoSite(countries []string, rules []C.Rule) ([]*router.DomainM
 		if err := geodata.InitGeoSite(); err != nil {
 			return nil, fmt.Errorf("can't initial GeoSite: %s", err)
 		}
+		log.Warnln("replace fallback-filter.geosite with nameserver-policy, it will be removed in the future")
 	}
 
 	for _, country := range countries {

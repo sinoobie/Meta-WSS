@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
-	"runtime"
 	"strings"
 	"sync"
 
@@ -24,17 +23,6 @@ var (
 	ErrorInvalidedNetworkStack = errors.New("invalided network stack")
 	ErrorDisableIPv6           = errors.New("IPv6 is disabled, dialer cancel")
 )
-
-func ParseNetwork(network string, addr netip.Addr) string {
-	if runtime.GOOS == "windows" { // fix bindIfaceToListenConfig() in windows force bind to an ipv4 address
-		if !strings.HasSuffix(network, "4") &&
-			!strings.HasSuffix(network, "6") &&
-			addr.Unmap().Is6() {
-			network += "6"
-		}
-	}
-	return network
-}
 
 func applyOptions(options ...Option) *option {
 	opt := &option{
@@ -77,18 +65,7 @@ func DialContext(ctx context.Context, network, address string, options ...Option
 }
 
 func ListenPacket(ctx context.Context, network, address string, options ...Option) (net.PacketConn, error) {
-	cfg := &option{
-		interfaceName: DefaultInterface.Load(),
-		routingMark:   int(DefaultRoutingMark.Load()),
-	}
-
-	for _, o := range DefaultOptions {
-		o(cfg)
-	}
-
-	for _, o := range options {
-		o(cfg)
-	}
+	cfg := applyOptions(options...)
 
 	lc := &net.ListenConfig{}
 	if cfg.interfaceName != "" {
@@ -144,6 +121,35 @@ func dialContext(ctx context.Context, network string, destination netip.Addr, po
 	return dialer.DialContext(ctx, network, net.JoinHostPort(destination.String(), port))
 }
 
+func singleDialContext(ctx context.Context, network string, address string, opt *option) (net.Conn, error) {
+	host, port, err := net.SplitHostPort(address)
+	if err != nil {
+		return nil, err
+	}
+
+	var ip netip.Addr
+	switch network {
+	case "tcp4", "udp4":
+		if opt.resolver == nil {
+			ip, err = resolver.ResolveIPv4ProxyServerHost(ctx, host)
+		} else {
+			ip, err = resolver.ResolveIPv4WithResolver(ctx, host, opt.resolver)
+		}
+	default:
+		if opt.resolver == nil {
+			ip, err = resolver.ResolveIPv6ProxyServerHost(ctx, host)
+		} else {
+			ip, err = resolver.ResolveIPv6WithResolver(ctx, host, opt.resolver)
+		}
+	}
+	if err != nil {
+		err = fmt.Errorf("dns resolve failed:%w", err)
+		return nil, err
+	}
+
+	return dialContext(ctx, network, ip, port, opt)
+}
+
 func dualStackDialContext(ctx context.Context, network, address string, opt *option) (net.Conn, error) {
 	host, port, err := net.SplitHostPort(address)
 	if err != nil {
@@ -190,6 +196,7 @@ func dualStackDialContext(ctx context.Context, network, address string, opt *opt
 			}
 		}
 		if result.error != nil {
+			result.error = fmt.Errorf("dns resolve failed:%w", result.error)
 			return
 		}
 		result.resolved = true
@@ -235,26 +242,6 @@ func dualStackDialContext(ctx context.Context, network, address string, opt *opt
 		err = fmt.Errorf("dual stack dial failed:%w", err)
 	}
 	return nil, err
-}
-
-func concurrentDualStackDialContext(ctx context.Context, network, address string, opt *option) (net.Conn, error) {
-	host, port, err := net.SplitHostPort(address)
-	if err != nil {
-		return nil, err
-	}
-
-	var ips []netip.Addr
-	if opt.resolver != nil {
-		ips, err = resolver.LookupIPWithResolver(ctx, host, opt.resolver)
-	} else {
-		ips, err = resolver.LookupIPProxyServerHost(ctx, host)
-	}
-
-	if err != nil {
-		return nil, err
-	}
-
-	return concurrentDialContext(ctx, network, ips, port, opt)
 }
 
 func concurrentDialContext(ctx context.Context, network string, ips []netip.Addr, port string, opt *option) (net.Conn, error) {
@@ -368,77 +355,51 @@ func concurrentDialContext(ctx context.Context, network string, ips []netip.Addr
 	return nil, finalError
 }
 
-func singleDialContext(ctx context.Context, network string, address string, opt *option) (net.Conn, error) {
-	host, port, err := net.SplitHostPort(address)
-	if err != nil {
-		return nil, err
-	}
-
-	var ip netip.Addr
-	switch network {
-	case "tcp4", "udp4":
-		if opt.resolver == nil {
-			ip, err = resolver.ResolveIPv4ProxyServerHost(ctx, host)
-		} else {
-			ip, err = resolver.ResolveIPv4WithResolver(ctx, host, opt.resolver)
-		}
-	default:
-		if opt.resolver == nil {
-			ip, err = resolver.ResolveIPv6ProxyServerHost(ctx, host)
-		} else {
-			ip, err = resolver.ResolveIPv6WithResolver(ctx, host, opt.resolver)
-		}
-	}
-	if err != nil {
-		return nil, err
-	}
-
-	return dialContext(ctx, network, ip, port, opt)
-}
-
 func concurrentSingleDialContext(ctx context.Context, network string, address string, opt *option) (net.Conn, error) {
-	switch network {
-	case "tcp4", "udp4":
-		return concurrentIPv4DialContext(ctx, network, address, opt)
-	default:
-		return concurrentIPv6DialContext(ctx, network, address, opt)
-	}
-}
-
-func concurrentIPv4DialContext(ctx context.Context, network, address string, opt *option) (net.Conn, error) {
 	host, port, err := net.SplitHostPort(address)
 	if err != nil {
 		return nil, err
 	}
 
 	var ips []netip.Addr
-	if opt.resolver == nil {
-		ips, err = resolver.LookupIPv4ProxyServerHost(ctx, host)
-	} else {
-		ips, err = resolver.LookupIPv4WithResolver(ctx, host, opt.resolver)
+	switch network {
+	case "tcp4", "udp4":
+		if opt.resolver == nil {
+			ips, err = resolver.LookupIPv4ProxyServerHost(ctx, host)
+		} else {
+			ips, err = resolver.LookupIPv4WithResolver(ctx, host, opt.resolver)
+		}
+	default:
+		if opt.resolver == nil {
+			ips, err = resolver.LookupIPv6ProxyServerHost(ctx, host)
+		} else {
+			ips, err = resolver.LookupIPv6WithResolver(ctx, host, opt.resolver)
+		}
 	}
 
 	if err != nil {
+		err = fmt.Errorf("dns resolve failed:%w", err)
 		return nil, err
 	}
 
 	return concurrentDialContext(ctx, network, ips, port, opt)
 }
 
-func concurrentIPv6DialContext(ctx context.Context, network, address string, opt *option) (net.Conn, error) {
+func concurrentDualStackDialContext(ctx context.Context, network, address string, opt *option) (net.Conn, error) {
 	host, port, err := net.SplitHostPort(address)
 	if err != nil {
 		return nil, err
 	}
 
 	var ips []netip.Addr
-	if opt.resolver == nil {
-		ips, err = resolver.LookupIPv6ProxyServerHost(ctx, host)
+	if opt.resolver != nil {
+		ips, err = resolver.LookupIPWithResolver(ctx, host, opt.resolver)
 	} else {
-		ips, err = resolver.LookupIPv6WithResolver(ctx, host, opt.resolver)
+		ips, err = resolver.LookupIPProxyServerHost(ctx, host)
 	}
 
 	if err != nil {
+		err = fmt.Errorf("dns resolve failed:%w", err)
 		return nil, err
 	}
 

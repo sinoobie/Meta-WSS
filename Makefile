@@ -19,6 +19,7 @@ GOBUILD=CGO_ENABLED=0 go build -tags with_gvisor -trimpath -ldflags '-X "github.
 PLATFORM_LIST = \
 	darwin-amd64 \
 	darwin-arm64 \
+	linux-386 \
 	linux-amd64-compatible \
 	linux-amd64 \
 	linux-armv5 \
@@ -129,18 +130,14 @@ windows-arm32v7:
 	GOARCH=arm GOOS=windows GOARM=7 $(GOBUILD) -o $(BINDIR)/$(NAME)-$@.exe
 
 gz_releases=$(addsuffix .gz, $(PLATFORM_LIST))
-zip_releases=$(addsuffix .zip, $(WINDOWS_ARCH_LIST))
 
 $(gz_releases): %.gz : %
 	chmod +x $(BINDIR)/$(NAME)-$(basename $@)
 	gzip -f -S -$(VERSION).gz $(BINDIR)/$(NAME)-$(basename $@)
 
-$(zip_releases): %.zip : %
-	zip -m -j $(BINDIR)/$(NAME)-$(basename $@)-$(VERSION).zip $(BINDIR)/$(NAME)-$(basename $@).exe
+all-arch: $(PLATFORM_LIST)
 
-all-arch: $(PLATFORM_LIST) $(WINDOWS_ARCH_LIST)
-
-releases: $(gz_releases) $(zip_releases)
+releases: $(gz_releases)
 
 vet:
 	go test ./...
